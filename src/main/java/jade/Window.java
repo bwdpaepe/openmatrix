@@ -5,9 +5,12 @@ import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.system.MemoryStack;
+import scenes.LevelScene;
+import scenes.Scene;
 
 import java.nio.IntBuffer;
 
+import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.system.MemoryStack.stackPush;
@@ -18,36 +21,44 @@ public class Window {
     private String title;
     private long glfwWindow;
 
+    public float r, g, b, a;
+
     private static Window window = null;
 
+    private static Scene currentScene;
+
     public Window() {
-        this.setWidth(1920);
-        this.setHeight(1080);
-        this.setTitle("OpenMatrix");
+        width = 1920;
+        height = 1080;
+        title = "OpenMatrix";
+        r = 1.0f;
+        g = 1.0f;
+        b = 1.0f;
+        a = 1.0f;
     }
 
-    public int getWidth() {
-        return width;
+    public static int getWidth() {
+        return get().width;
     }
 
-    public void setWidth(int width) {
-        this.width = width;
+    public static int getHeight() {
+        return get().height;
     }
 
-    public int getHeight() {
-        return height;
+    public static void setWidth (int newWidth) {
+        get().width = newWidth;
     }
 
-    public void setHeight(int height) {
-        this.height = height;
+    public static void setHeight (int newHeight) {
+        get().height = newHeight;
     }
 
-    public String getTitle() {
-        return title;
+    public static String getTitle() {
+        return get().title;
     }
 
-    public void setTitle(String title) {
-        this.title = title;
+    public static void setTitle(String title) {
+        get().title = title;
     }
 
     public static Window get() {
@@ -62,6 +73,14 @@ public class Window {
 
         init();
         loop();
+
+        // Free the memory
+        glfwFreeCallbacks(glfwWindow);
+        glfwDestroyWindow(glfwWindow);
+
+        // Terminate GLFW and free the error callback
+        glfwTerminate();
+        glfwSetErrorCallback(null).free();
     }
 
     public void init() {
@@ -80,10 +99,19 @@ public class Window {
         glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
 
         // Create the window
-        glfwWindow = glfwCreateWindow(this.getWidth(), this.getHeight(), this.getTitle(), NULL, NULL);
+        glfwWindow = glfwCreateWindow(this.width, this.height, this.title, NULL, NULL);
         if ( glfwWindow == NULL )
             throw new RuntimeException("Failed to create the GLFW window");
 
+
+        glfwSetCursorPosCallback(glfwWindow, MouseListener::mousePosCallback);
+        glfwSetMouseButtonCallback(glfwWindow, MouseListener::mouseButtonCallback);
+        glfwSetScrollCallback(glfwWindow, MouseListener::mouseScrollCallback);
+        glfwSetKeyCallback(glfwWindow, KeyListener::keyCallback);
+        glfwSetWindowSizeCallback(glfwWindow, (w, newWidth, newHeight) -> {
+            Window.setWidth(newWidth);
+            Window.setHeight(newHeight);
+        });
 
         // Make the OpenGL context current
         glfwMakeContextCurrent(glfwWindow);
@@ -100,26 +128,51 @@ public class Window {
         // bindings available for use.
         GL.createCapabilities();
 
+        Window.changeScene(0);
+
 
     }
 
     public void loop() {
 
 
-        // Set the clear color
-        glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
+        float beginTime = (float)glfwGetTime();
+        float endTime = (float)glfwGetTime();
+        float dt = -1.0f;
 
         // Run the rendering loop until the user has attempted to close
         // the window or has pressed the ESCAPE key.
         while ( !glfwWindowShouldClose(glfwWindow) ) {
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the framebuffer
-
-            glfwSwapBuffers(glfwWindow); // swap the color buffers
-
             // Poll for window events. The key callback above will only be
             // invoked during this call.
             glfwPollEvents();
+
+            glClearColor(r,g,b,a);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the framebuffer
+
+            if (dt >= 0) {
+                currentScene.update(dt);
+            }
+
+            glfwSwapBuffers(glfwWindow); // swap the color buffers
+
+            endTime = (float)glfwGetTime();
+            dt = endTime - beginTime;
+            beginTime = endTime;
+
         }
 
+    }
+
+    public static void changeScene(int newScene) {
+        switch (newScene) {
+            case 0:
+                currentScene = new LevelScene();
+                currentScene.init();
+                break;
+            default:
+                assert false : "Unknown scene '" + newScene + "'";
+                break;
+        }
     }
 }
